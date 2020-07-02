@@ -1,0 +1,34 @@
+version: "3.4"
+
+x-app:
+  &default-app
+  image: awstraining_sqs_training_dyp
+  volumes:
+    - "./:/app"
+    - "~/.aws/:/root/.aws"
+  working_dir: /app
+
+services:
+  build:
+    image: hseeberger/scala-sbt:8u181_2.12.8_1.2.8
+    command: sbt assembly
+    working_dir: /app
+    volumes:
+      - "./:/app"
+      - "~/.sbt:/root/.sbt"
+      - "~/.ivy2:/root/.ivy2"
+      - "~/.aws/:/root/.aws"
+
+  upload:
+    <<: *default-app
+    command: s3 cp ./target/scala-2.12/AWSTraining_SQS-assembly-0.1.jar s3://aws-training-dingyunpeng/
+
+  deploy:
+    <<: *default-app
+    command: cloudformation deploy --template-file ./cloudformation.yml --stack-name dypSQS
+
+  delete:
+    <<: *default-app
+    command: cloudformation delete-stack --stack-name dypSQS
+
+#  docker-compose run build

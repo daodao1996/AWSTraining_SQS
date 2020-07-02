@@ -1,0 +1,150 @@
+Resources:
+  SQSEventRuleDyp:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "trigger SNS"
+      ScheduleExpression: "cron(0/1 * * * ? *)"
+      State: "ENABLED"
+      Targets:
+        - Arn: !Ref EventSendMailDyp
+          Input: "{\"text\":\"triggered by cloudwatch event rule\"}"
+          Id: "triggerSnsV1"
+
+  EventSendMailDyp:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: "triggerByEventSendMail_dyp"
+      KmsMasterKeyId: e1ea4558-80e1-47c7-81ce-dcd9627a2da0
+      Tags:
+        - Key: "publisher"
+          Value: "yunpeng.ding"
+
+  SQSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref EventSendMailDyp
+      Endpoint: !GetAtt TriggerLambdaQueueDyp.Arn
+      Protocol: sqs
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref EventSendMailDyp
+      Endpoint: yunpeng.ding@thoughtworks.com
+      Protocol: email
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+
+  SNSTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref EventSendMailDyp
+      PolicyDocument:
+        Id: MyTopicPolicy
+        Version: '2012-10-17'
+        Statement:
+          - Sid: allow-cloudwatch-rule-public
+            Effect: Allow
+            Principal: '*'
+            Action:
+              - sns:Subscribe
+              - sns:Publish
+            Resource: !Ref EventSendMailDyp
+          - Sid: "AWSCloudTrailSNSPolicy"
+            Effect: "Allow"
+            Principal:
+              Service: "cloudtrail.amazonaws.com"
+            Resource: "*"
+            Action: "SNS:Publish"
+
+  TriggerLambdaQueueDyp:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 604800
+      VisibilityTimeout: 300
+      QueueName: TriggerLambdaQueueDyp
+      RedrivePolicy:
+        maxReceiveCount: 5
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+
+  SQSPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Sid: 'allow-sns-messages'
+            Effect: Allow
+            Principal: "*"
+            Action: "SQS:SendMessage"
+            Resource: !GetAtt
+              - TriggerLambdaQueueDyp
+              - Arn
+      Queues:
+        - !Ref TriggerLambdaQueueDyp
+
+  ReadEventDyp:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: "aws-training-dingyunpeng"
+        S3Key: "AWSTraining_SQS-assembly-0.1.jar"
+      Handler: com.training.LogEvent::log
+      Role: arn:aws:iam::494526681395:role/dyp_sqs
+      Runtime: java8
+      Timeout: 30
+      MemorySize: 256
+
+  SQSTriggerLambdaSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 10
+      Enabled: true
+      EventSourceArn: !GetAtt TriggerLambdaQueueDyp.Arn
+      FunctionName: !GetAtt ReadEventDyp.Arn
+
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 604800
+      VisibilityTimeout: 300
+      KmsMasterKeyId: e1ea4558-80e1-47c7-81ce-dcd9627a2da0
+      QueueName: DeadLetterQueueDyp
+
+  FailureMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: sns/ap-southeast-1/494526681395/triggerByEventSendMail_dyp/Failure
+      FilterPattern: "FAILURE"
+      MetricTransformations:
+        - MetricValue: 1
+          MetricNamespace: "training_SQS_dyp"
+          MetricName: "SNS_failure_dyp"
+
+  SNSFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Metrics invocations
+      AlarmName: SNSFailureAlarmDyp
+      AlarmActions:
+        - !Ref SnsFailureSendMailSNSTopic
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      Threshold: 0
+      Period: 60
+      MetricName: SNS_failure_dyp
+      Namespace: training_SQS_dyp
+      Statistic: Average
+      TreatMissingData: notBreaching
+
+  SnsFailureSendMailSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        - Endpoint: yunpeng.ding@thoughtworks.com
+          Protocol: email
+      TopicName: "SnsFailureSendMail_dyp"
+
+#  TriggerLambdaQueueDyp
