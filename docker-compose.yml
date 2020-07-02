@@ -2,7 +2,7 @@ version: "3.4"
 
 x-app:
   &default-app
-  image: awstraining_sqs_training_dyp
+  image: daodao1996/awstraining_sqs_training_dyp
   volumes:
     - "./:/app"
     - "~/.aws/:/root/.aws"
