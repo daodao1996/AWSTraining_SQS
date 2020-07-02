@@ -14,3 +14,10 @@
 12. 消息发送失败报警
 
 
+### 使用
+1. docker-compose run build   //build jar包
+2. docker-compose run upload  //把jar包上传到S3
+3. docker-compose run deploy  //部署aws资源
+4. docker-compose run delete  //删除cloudformation stack
+
+
